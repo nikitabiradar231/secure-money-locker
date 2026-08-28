@@ -23,11 +23,7 @@ contract CommissionEscrowTest is Test {
 
         vm.prank(collector);
 
-        uint256 commissionId = escrow.createCommission{value: amount}(
-            artisan,
-            arbiter,
-            deadline
-        );
+        uint256 commissionId = escrow.createCommission{value: amount}(artisan, arbiter, deadline);
 
         assertEq(address(escrow).balance, amount);
 
@@ -47,157 +43,136 @@ contract CommissionEscrowTest is Test {
         assertEq(storedDeadline, deadline);
         assertEq(uint8(status), uint8(CommissionEscrow.Status.Funded));
     }
+
     function testCannotReleaseBeforeDelivery() public {
-    uint256 amount = 1 ether;
-    uint256 deadline = block.timestamp + 7 days;
+        uint256 amount = 1 ether;
+        uint256 deadline = block.timestamp + 7 days;
 
-    vm.prank(collector);
+        vm.prank(collector);
 
-    uint256 commissionId = escrow.createCommission{value: amount}(
-        artisan,
-        arbiter,
-        deadline
-    );
+        uint256 commissionId = escrow.createCommission{value: amount}(artisan, arbiter, deadline);
 
-    vm.prank(collector);
+        vm.prank(collector);
 
-    vm.expectRevert("delivery not confirmed");
+        vm.expectRevert("delivery not confirmed");
 
-    escrow.releasePayment(commissionId);
-}
-function testReleaseAfterDelivery() public {
-    uint256 amount = 1 ether;
-    uint256 deadline = block.timestamp + 7 days;
+        escrow.releasePayment(commissionId);
+    }
 
-    vm.prank(collector);
+    function testReleaseAfterDelivery() public {
+        uint256 amount = 1 ether;
+        uint256 deadline = block.timestamp + 7 days;
 
-    uint256 commissionId = escrow.createCommission{value: amount}(
-        artisan,
-        arbiter,
-        deadline
-    );
+        vm.prank(collector);
 
-    uint256 artisanBalanceBefore = artisan.balance;
+        uint256 commissionId = escrow.createCommission{value: amount}(artisan, arbiter, deadline);
 
-    vm.prank(collector);
-    escrow.confirmDelivery(commissionId);
+        uint256 artisanBalanceBefore = artisan.balance;
 
-    vm.prank(collector);
-    escrow.releasePayment(commissionId);
+        vm.prank(collector);
+        escrow.confirmDelivery(commissionId);
 
-    assertEq(artisan.balance, artisanBalanceBefore + amount);
-    assertEq(address(escrow).balance, 0);
+        vm.prank(collector);
+        escrow.releasePayment(commissionId);
 
-    (, , , uint256 storedAmount, , CommissionEscrow.Status status) =
-        escrow.commissions(commissionId);
+        assertEq(artisan.balance, artisanBalanceBefore + amount);
+        assertEq(address(escrow).balance, 0);
 
-    assertEq(storedAmount, 0);
-    assertEq(uint8(status), uint8(CommissionEscrow.Status.Paid));
-}
-function testRefundAfterDeadline() public {
-    uint256 amount = 1 ether;
-    uint256 deadline = block.timestamp + 1 days;
+        (,,, uint256 storedAmount,, CommissionEscrow.Status status) = escrow.commissions(commissionId);
 
-    vm.prank(collector);
+        assertEq(storedAmount, 0);
+        assertEq(uint8(status), uint8(CommissionEscrow.Status.Paid));
+    }
 
-    uint256 commissionId = escrow.createCommission{value: amount}(
-        artisan,
-        arbiter,
-        deadline
-    );
+    function testRefundAfterDeadline() public {
+        uint256 amount = 1 ether;
+        uint256 deadline = block.timestamp + 1 days;
 
-    uint256 collectorBalanceBefore = collector.balance;
+        vm.prank(collector);
 
-    // Move blockchain time past the deadline
-    vm.warp(deadline + 1);
+        uint256 commissionId = escrow.createCommission{value: amount}(artisan, arbiter, deadline);
 
-    vm.prank(collector);
-    escrow.refundAfterDeadline(commissionId);
+        uint256 collectorBalanceBefore = collector.balance;
 
-    assertEq(collector.balance, collectorBalanceBefore + amount);
-    assertEq(address(escrow).balance, 0);
+        // Move blockchain time past the deadline
+        vm.warp(deadline + 1);
 
-    (, , , uint256 storedAmount, , CommissionEscrow.Status status) =
-        escrow.commissions(commissionId);
+        vm.prank(collector);
+        escrow.refundAfterDeadline(commissionId);
 
-    assertEq(storedAmount, 0);
-    assertEq(uint8(status), uint8(CommissionEscrow.Status.Refunded));
-}
-function testArbiterCanResolveDisputeForArtisan() public {
-    uint256 amount = 1 ether;
-    uint256 deadline = block.timestamp + 7 days;
+        assertEq(collector.balance, collectorBalanceBefore + amount);
+        assertEq(address(escrow).balance, 0);
 
-    vm.prank(collector);
+        (,,, uint256 storedAmount,, CommissionEscrow.Status status) = escrow.commissions(commissionId);
 
-    uint256 commissionId = escrow.createCommission{value: amount}(
-        artisan,
-        arbiter,
-        deadline
-    );
+        assertEq(storedAmount, 0);
+        assertEq(uint8(status), uint8(CommissionEscrow.Status.Refunded));
+    }
 
-    vm.prank(collector);
-    escrow.raiseDispute(commissionId);
+    function testArbiterCanResolveDisputeForArtisan() public {
+        uint256 amount = 1 ether;
+        uint256 deadline = block.timestamp + 7 days;
 
-    uint256 artisanBalanceBefore = artisan.balance;
+        vm.prank(collector);
 
-    vm.prank(arbiter);
-    escrow.resolveDispute(commissionId, true);
+        uint256 commissionId = escrow.createCommission{value: amount}(artisan, arbiter, deadline);
 
-    assertEq(artisan.balance, artisanBalanceBefore + amount);
-    assertEq(address(escrow).balance, 0);
+        vm.prank(collector);
+        escrow.raiseDispute(commissionId);
 
-    (, , , uint256 storedAmount, , CommissionEscrow.Status status) =
-        escrow.commissions(commissionId);
+        uint256 artisanBalanceBefore = artisan.balance;
 
-    assertEq(storedAmount, 0);
-    assertEq(uint8(status), uint8(CommissionEscrow.Status.Paid));
-}
-function testOnlyArbiterCanResolveDispute() public {
-    uint256 amount = 1 ether;
-    uint256 deadline = block.timestamp + 7 days;
+        vm.prank(arbiter);
+        escrow.resolveDispute(commissionId, true);
 
-    vm.prank(collector);
+        assertEq(artisan.balance, artisanBalanceBefore + amount);
+        assertEq(address(escrow).balance, 0);
 
-    uint256 commissionId = escrow.createCommission{value: amount}(
-        artisan,
-        arbiter,
-        deadline
-    );
+        (,,, uint256 storedAmount,, CommissionEscrow.Status status) = escrow.commissions(commissionId);
 
-    vm.prank(collector);
-    escrow.raiseDispute(commissionId);
+        assertEq(storedAmount, 0);
+        assertEq(uint8(status), uint8(CommissionEscrow.Status.Paid));
+    }
 
-    // Collector cannot resolve
-    vm.prank(collector);
-    vm.expectRevert("only arbiter can resolve");
-    escrow.resolveDispute(commissionId, true);
+    function testOnlyArbiterCanResolveDispute() public {
+        uint256 amount = 1 ether;
+        uint256 deadline = block.timestamp + 7 days;
 
-    // Artisan cannot resolve
-    vm.prank(artisan);
-    vm.expectRevert("only arbiter can resolve");
-    escrow.resolveDispute(commissionId, true);
-}
-function testCannotReleaseTwice() public {
-    uint256 amount = 1 ether;
-    uint256 deadline = block.timestamp + 7 days;
+        vm.prank(collector);
 
-    vm.prank(collector);
+        uint256 commissionId = escrow.createCommission{value: amount}(artisan, arbiter, deadline);
 
-    uint256 commissionId = escrow.createCommission{value: amount}(
-        artisan,
-        arbiter,
-        deadline
-    );
+        vm.prank(collector);
+        escrow.raiseDispute(commissionId);
 
-    vm.prank(collector);
-    escrow.confirmDelivery(commissionId);
+        // Collector cannot resolve
+        vm.prank(collector);
+        vm.expectRevert("only arbiter can resolve");
+        escrow.resolveDispute(commissionId, true);
 
-    vm.prank(collector);
-    escrow.releasePayment(commissionId);
+        // Artisan cannot resolve
+        vm.prank(artisan);
+        vm.expectRevert("only arbiter can resolve");
+        escrow.resolveDispute(commissionId, true);
+    }
 
-    // Try to release the same commission again
-    vm.prank(collector);
-    vm.expectRevert("delivery not confirmed");
-    escrow.releasePayment(commissionId);
-}
+    function testCannotReleaseTwice() public {
+        uint256 amount = 1 ether;
+        uint256 deadline = block.timestamp + 7 days;
+
+        vm.prank(collector);
+
+        uint256 commissionId = escrow.createCommission{value: amount}(artisan, arbiter, deadline);
+
+        vm.prank(collector);
+        escrow.confirmDelivery(commissionId);
+
+        vm.prank(collector);
+        escrow.releasePayment(commissionId);
+
+        // Try to release the same commission again
+        vm.prank(collector);
+        vm.expectRevert("delivery not confirmed");
+        escrow.releasePayment(commissionId);
+    }
 }
